@@ -1,0 +1,102 @@
+/* ===== 教育系ブルーを基調にした共通デザイン ===== */
+body {
+    font-family: "Noto Sans JP", "メイリオ", sans-serif;
+    background-color: #f4f8fb;
+    margin: 0;
+    padding: 0;
+    color: #333;
+}
+
+/* --- ヘッダー --- */
+header {
+    background: linear-gradient(90deg, #0078d7, #2196f3);
+    color: white;
+    text-align: center;
+    padding: 20px 0;
+    font-size: 1.6rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* --- フッター --- */
+footer {
+    background-color: #0078d7;
+    color: white;
+    text-align: center;
+    padding: 15px 0;
+    margin-top: 40px;
+    font-size: 0.9rem;
+    letter-spacing: 0.5px;
+    box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.1);
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+}
+
+/* コンテナ */
+.container {
+    background: #fff;
+    max-width: 700px;
+    margin: 40px auto;
+    padding: 30px 40px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+}
+
+/* ラベルとフォーム */
+label {
+    font-weight: 600;
+    display: block;
+    margin-top: 18px;
+    margin-bottom: 6px;
+    color: #1e88e5;
+}
+
+select, textarea, input {
+    width: 100%;
+    padding: 10px;
+    font-size: 1rem;
+    border: 1px solid #bbb;
+    border-radius: 6px;
+    box-sizing: border-box;
+    transition: 0.2s ease-in-out;
+}
+
+select:focus, textarea:focus, input:focus {
+    border-color: #2196f3;
+    box-shadow: 0 0 4px rgba(33,150,243,0.4);
+}
+
+/* ボタン */
+button {
+    background-color: #0078d7;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-size: 1rem;
+    font-weight: bold;
+    margin-top: 20px;
+    cursor: pointer;
+    width: 100%;
+    transition: 0.2s;
+}
+
+button:hover {
+    background-color: #005fa3;
+}
+
+/* メッセージ */
+.message {
+    text-align: center;
+    margin-bottom: 15px;
+    font-weight: bold;
+}
+
+.message.success {
+    color: #2e7d32;
+}
+
+.message.error {
+    color: #e53935;
+}
