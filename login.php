@@ -1,45 +1,49 @@
 <?php
 session_start();
-require_once(__DIR__ . '/config.php');
+require_once(__DIR__ . '/config.php'); // 安全に設定ファイルを読み込む
 
 // エラーメッセージ初期化
-$error = "";
+$error = '';
 
-// フォームが送信された場合
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $username = trim($_POST["username"]);
-    $password = trim($_POST["password"]);
+    $username = trim($_POST['username']);
+    $password = trim($_POST['password']);
 
-    try {
-        $sql = "SELECT * FROM users WHERE username = :username";
-        $stmt = $pdo->prepare($sql);
-        $stmt->bindParam(':username', $username, PDO::PARAM_STR);
-        $stmt->execute();
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!empty($username) && !empty($password)) {
+        try {
+            $sql = "SELECT * FROM users WHERE username = :username";
+            $stmt = $pdo->prepare($sql);
+            $stmt->bindParam(':username', $username, PDO::PARAM_STR);
+            $stmt->execute();
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($user && $password === $user['password']) {
-            // ログイン成功
-            $_SESSION['username'] = $user['username'];
-            $_SESSION['role'] = $user['role'];
+            if ($user && password_verify($password, $user['password'])) {
+                // セッションにユーザー情報を保存
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['username'] = $user['username'];
+                $_SESSION['role'] = $user['role'];
 
-            // ロール別遷移処理
-            if ($user['role'] === 'teacher') {
-                header("Location: teacher_home.php");
-                exit;
-            } elseif ($user['role'] === 'student') {
-                header("Location: student_home.php");
-                exit;
-            } elseif ($user['role'] === 'admin') {
-                header("Location: admin_register.php");
-                exit;
+                // ロールに応じて遷移
+                if ($user['role'] === 'student') {
+                    header("Location: siteA.php");
+                    exit();
+                } elseif ($user['role'] === 'teacher') {
+                    header("Location: siteB.php");
+                    exit();
+                } elseif ($user['role'] === 'admin') {
+                    header("Location: admin_register.php");
+                    exit();
+                } else {
+                    $error = "不明なロールが設定されています。";
+                }
             } else {
-                $error = "不明なロールが設定されています。";
+                $error = "ユーザー名またはパスワードが間違っています。";
             }
-        } else {
-            $error = "ユーザー名またはパスワードが違います。";
+        } catch (PDOException $e) {
+            $error = "データベースエラー：" . $e->getMessage();
         }
-    } catch (PDOException $e) {
-        $error = "データベースエラー: " . $e->getMessage();
+    } else {
+        $error = "すべてのフィールドを入力してください。";
     }
 }
 ?>
@@ -48,19 +52,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>ログイン</title>
+    <title>ログインページ</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h2>ログイン</h2>
-    <?php if ($error): ?>
-        <p style="color:red;"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></p>
-    <?php endif; ?>
-
-    <form method="POST" action="">
-        <input type="text" name="username" placeholder="ユーザー名" required><br>
-        <input type="password" name="password" placeholder="パスワード" required><br>
-        <button type="submit">ログイン</button>
-    </form>
+    <div class="login-container">
+        <h2>ログイン</h2>
+        <?php if ($error): ?>
+            <p style="color:red;"><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></p>
+        <?php endif; ?>
+        <form method="POST" action="">
+            <input type="text" name="username" placeholder="ユーザー名" required><br>
+            <input type="password" name="password" placeholder="パスワード" required><br>
+            <button type="submit">ログイン</button>
+        </form>
+    </div>
 </body>
 </html>
