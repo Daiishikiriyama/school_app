@@ -2,7 +2,6 @@
 session_start();
 require_once(__DIR__ . '/config.php'); // 安全に設定ファイルを読み込む
 
-// エラーメッセージ初期化
 $error = '';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -17,13 +16,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt->execute();
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            if ($user && password_verify($password, $user['password'])) {
-                // セッションにユーザー情報を保存
+            // 🔹 開発用：平文パスワードで照合
+            if ($user && $password === $user['password']) {
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['username'] = $user['username'];
                 $_SESSION['role'] = $user['role'];
 
-                // ロールに応じて遷移
                 if ($user['role'] === 'student') {
                     header("Location: siteA.php");
                     exit();
