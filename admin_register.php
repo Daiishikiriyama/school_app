@@ -3,8 +3,8 @@
 session_start();
 require_once __DIR__ . '/db_connect.php';
 
-// ① 管理者チェック（admin ロールでログイン済みのみ許可）
-if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
+// ✅ 管理者チェック（セッション変数名を login.php に合わせる）
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
     http_response_code(403);
     echo 'このページへは管理者のみアクセスできます。';
     exit;
