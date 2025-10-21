@@ -1,13 +1,15 @@
 <?php
-// --- データベース接続設定 ---
-$host = 'localhost';
-$dbname = 'school_app'; // phpMyAdminで確認したデータベース名
-$username = 'root';     // XAMPP標準設定
-$password = '';         // パスワード未設定なら空欄
+$host = getenv('DB_HOST');
+$dbname = getenv('DB_NAME');
+$username = getenv('DB_USER');
+$password = getenv('DB_PASS');
+$port = getenv('DB_PORT') ?: '3306';
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $dsn = "mysql:host=$host;dbname=$dbname;port=$port;charset=utf8mb4";
+    $pdo = new PDO($dsn, $username, $password, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+    ]);
 } catch (PDOException $e) {
     die("データベース接続エラー: " . $e->getMessage());
 }
