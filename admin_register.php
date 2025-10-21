@@ -3,29 +3,35 @@
 session_start();
 require_once __DIR__ . '/db_connect.php';
 
-// ✅ 管理者チェック（セッション変数名を login.php に合わせる）
+// ✅ 管理者チェック
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
     http_response_code(403);
     echo 'このページへは管理者のみアクセスできます。';
     exit;
 }
 
-// ② CSRF トークン生成
+// ✅ ログアウト処理
+if (isset($_GET['logout'])) {
+    session_destroy();
+    header('Location: login.php');
+    exit;
+}
+
+// ✅ CSRF トークン生成
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-// ③ クラス一覧を取得（セレクト用）
+// ✅ クラス一覧
 $classes = [];
 try {
     $stmt = $pdo->query("SELECT id, class_name FROM classes ORDER BY id ASC");
     $classes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    // classes 未作成でも画面自体は出したい
     $classes = [];
 }
 
-// ④ フラッシュメッセージ
+// ✅ フラッシュメッセージ
 $flash = function ($key) {
     if (!empty($_SESSION[$key])) {
         $msg = $_SESSION[$key];
@@ -35,116 +41,83 @@ $flash = function ($key) {
     return '';
 };
 
-// ⑤ POST処理
+// ✅ POST処理（新規ユーザー登録）
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // CSRF チェック
     if (empty($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
         $_SESSION['err'] = '不正なリクエストです。もう一度やり直してください。';
         header('Location: admin_register.php');
         exit;
     }
 
-    // 入力値取得 & サニタイズ
     $role      = $_POST['role']      ?? '';
     $username  = trim($_POST['username'] ?? '');
     $name      = trim($_POST['name']     ?? '');
     $password  = $_POST['password']  ?? '';
     $password2 = $_POST['password2'] ?? '';
-    $class_id  = $_POST['class_id']  ?? ''; // 文字列で来るのでのちに int 変換
+    $class_id  = $_POST['class_id']  ?? '';
 
-    // バリデーション
     $errors = [];
 
-    // role
     $validRoles = ['admin', 'teacher', 'student'];
-    if (!in_array($role, $validRoles, true)) {
-        $errors[] = 'ロールが不正です。';
-    }
-
-    // username
-    if ($username === '' || !preg_match('/^[a-zA-Z0-9_\-]{3,50}$/', $username)) {
+    if (!in_array($role, $validRoles, true)) $errors[] = 'ロールが不正です。';
+    if ($username === '' || !preg_match('/^[a-zA-Z0-9_\-]{3,50}$/', $username))
         $errors[] = 'ログインIDは半角英数字・アンダーバー・ハイフンで3〜50文字にしてください。';
-    }
-
-    // name
-    if ($name === '' || mb_strlen($name) > 100) {
+    if ($name === '' || mb_strlen($name) > 100)
         $errors[] = '表示名は1〜100文字で入力してください。';
-    }
-
-    // password
-    if (strlen($password) < 6) {
+    if (strlen($password) < 6)
         $errors[] = 'パスワードは6文字以上にしてください。';
-    }
-    if ($password !== $password2) {
+    if ($password !== $password2)
         $errors[] = 'パスワード（確認）が一致しません。';
-    }
 
-    // class_id（student は必須 / teacher は任意 / admin は null）
+    // class_id チェック
     $classIdToSave = null;
     if ($role === 'student') {
-        if ($class_id === '' || !ctype_digit($class_id)) {
+        if ($class_id === '' || !ctype_digit($class_id))
             $errors[] = '生徒登録にはクラスの選択が必須です。';
-        } else {
+        else
             $classIdToSave = (int)$class_id;
-        }
-    } elseif ($role === 'teacher') {
-        if ($class_id !== '' && ctype_digit($class_id)) {
-            $classIdToSave = (int)$class_id;
-        } else {
-            $classIdToSave = null; // 担任未設定でも可
-        }
-    } else { // admin
-        $classIdToSave = null;
+    } elseif ($role === 'teacher' && ctype_digit($class_id)) {
+        $classIdToSave = (int)$class_id;
     }
 
-    // 既存ユーザー重複チェック
+    // 重複チェック
     if (!$errors) {
-        try {
-            $check = $pdo->prepare("SELECT COUNT(*) FROM users WHERE username = :u");
-            $check->execute([':u' => $username]);
-            if ($check->fetchColumn() > 0) {
-                $errors[] = 'このログインIDはすでに使われています。';
-            }
-        } catch (PDOException $e) {
-            $errors[] = '重複チェック中にエラーが発生しました：' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
-        }
+        $check = $pdo->prepare("SELECT COUNT(*) FROM users WHERE username = :u");
+        $check->execute([':u' => $username]);
+        if ($check->fetchColumn() > 0) $errors[] = 'このログインIDはすでに使われています。';
     }
 
-    // 登録
+    // 登録処理
     if (!$errors) {
-        try {
-            $hash = password_hash($password, PASSWORD_DEFAULT);
+        $hash = password_hash($password, PASSWORD_DEFAULT);
+        $sql = "INSERT INTO users (username, password, role, class_id, name)
+                VALUES (:username, :password, :role, :class_id, :name)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->bindValue(':username', $username);
+        $stmt->bindValue(':password', $hash);
+        $stmt->bindValue(':role', $role);
+        if ($classIdToSave === null) $stmt->bindValue(':class_id', null, PDO::PARAM_NULL);
+        else $stmt->bindValue(':class_id', $classIdToSave, PDO::PARAM_INT);
+        $stmt->bindValue(':name', $name);
+        $stmt->execute();
 
-            $sql = "INSERT INTO users (username, password, role, class_id, name)
-                    VALUES (:username, :password, :role, :class_id, :name)";
-            $stmt = $pdo->prepare($sql);
-            $stmt->bindValue(':username', $username, PDO::PARAM_STR);
-            $stmt->bindValue(':password', $hash,     PDO::PARAM_STR);
-            $stmt->bindValue(':role',     $role,     PDO::PARAM_STR);
-            // class_id は null 許容
-            if ($classIdToSave === null) {
-                $stmt->bindValue(':class_id', null, PDO::PARAM_NULL);
-            } else {
-                $stmt->bindValue(':class_id', $classIdToSave, PDO::PARAM_INT);
-            }
-            $stmt->bindValue(':name', $name, PDO::PARAM_STR);
-            $stmt->execute();
-
-            $_SESSION['ok'] = 'ユーザーを登録しました。';
-            header('Location: admin_register.php');
-            exit;
-        } catch (PDOException $e) {
-            $_SESSION['err'] = '登録に失敗しました：' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
-            header('Location: admin_register.php');
-            exit;
-        }
+        $_SESSION['ok'] = 'ユーザーを登録しました。';
+        header('Location: admin_register.php');
+        exit;
     } else {
-        $_SESSION['err'] = implode("<br>", array_map(function($m){
-            return htmlspecialchars($m, ENT_QUOTES, 'UTF-8');
-        }, $errors));
+        $_SESSION['err'] = implode("<br>", array_map(fn($m) => htmlspecialchars($m, ENT_QUOTES, 'UTF-8'), $errors));
         header('Location: admin_register.php');
         exit;
     }
+}
+
+// ✅ 登録済みユーザー一覧を取得
+$users = [];
+try {
+    $stmt = $pdo->query("SELECT id, username, name, role, class_id FROM users ORDER BY id ASC");
+    $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $users = [];
 }
 ?>
 <!DOCTYPE html>
@@ -155,7 +128,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body{font-family:"Hiragino Kaku Gothic ProN","メイリオ",sans-serif;background:#f6f8fb;margin:0}
-header{background:#0d5bd7;color:#fff;padding:16px;text-align:center;font-weight:700}
+header{background:#0d5bd7;color:#fff;padding:16px;text-align:center;font-weight:700;position:relative}
+.logout-btn{position:absolute;right:20px;top:16px;background:#fff;color:#0d5bd7;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-weight:700}
+.logout-btn:hover{background:#e8efff}
 .container{max-width:720px;margin:24px auto;background:#fff;padding:24px;border-radius:12px;box-shadow:0 10px 20px rgba(0,0,0,.06)}
 h1{font-size:22px;margin:0 0 16px}
 label{display:block;font-weight:700;margin:14px 0 6px}
@@ -166,10 +141,19 @@ select,input[type=text],input[type=password]{width:100%;padding:10px;border:1px 
 .msg-ok{background:#e8f5ff;color:#075aa0;border:1px solid #b8dcff;padding:10px 12px;border-radius:8px;margin-bottom:12px}
 .msg-err{background:#ffeeee;color:#a00;border:1px solid #ffc9c9;padding:10px 12px;border-radius:8px;margin-bottom:12px}
 small{color:#666}
+table{width:100%;border-collapse:collapse;margin-top:20px}
+th,td{border:1px solid #ccc;padding:8px;text-align:left}
+th{background:#e8f0fe}
 </style>
 </head>
 <body>
-<header>管理者：ユーザー登録</header>
+<header>
+管理者：ユーザー登録
+<form method="get" action="admin_register.php" style="display:inline;">
+    <button class="logout-btn" name="logout" value="1">ログアウト</button>
+</form>
+</header>
+
 <div class="container">
     <h1>新規ユーザーを登録</h1>
 
@@ -224,6 +208,20 @@ small{color:#666}
 
         <button class="btn" type="submit">登録する</button>
     </form>
+
+    <h2 style="margin-top:40px;">登録済みユーザー一覧</h2>
+    <table>
+        <tr><th>ID</th><th>ログインID</th><th>表示名</th><th>ロール</th><th>クラス</th></tr>
+        <?php foreach ($users as $u): ?>
+            <tr>
+                <td><?= (int)$u['id'] ?></td>
+                <td><?= htmlspecialchars($u['username'], ENT_QUOTES, 'UTF-8') ?></td>
+                <td><?= htmlspecialchars($u['name'], ENT_QUOTES, 'UTF-8') ?></td>
+                <td><?= htmlspecialchars($u['role'], ENT_QUOTES, 'UTF-8') ?></td>
+                <td><?= htmlspecialchars($u['class_id'] ?? '-', ENT_QUOTES, 'UTF-8') ?></td>
+            </tr>
+        <?php endforeach; ?>
+    </table>
 </div>
 </body>
 </html>
