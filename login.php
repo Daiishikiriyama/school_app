@@ -1,123 +1,66 @@
 <?php
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
 session_start();
-require_once 'db_connect.php';
+require_once 'config.php';
 
-$error = '';
+// エラーメッセージ初期化
+$error = "";
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = trim($_POST['username']);
-    $password = trim($_POST['password']);
+// フォームが送信された場合
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $username = trim($_POST["username"]);
+    $password = trim($_POST["password"]);
 
-    if ($username && $password) {
-        try {
-            $stmt = $pdo->prepare("SELECT * FROM users WHERE username = :username LIMIT 1");
-            $stmt->execute([':username' => $username]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    try {
+        $sql = "SELECT * FROM users WHERE username = :username";
+        $stmt = $pdo->prepare($sql);
+        $stmt->bindParam(':username', $username, PDO::PARAM_STR);
+        $stmt->execute();
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            if ($user) {
-                // ✅ ハッシュ化 or 平文 どちらにも対応
-                $is_valid = false;
-                if (password_verify($password, $user['password']) || $user['password'] === $password) {
-                    $is_valid = true;
-                }
+        if ($user && $password === $user['password']) {
+            // ログイン成功
+            $_SESSION['username'] = $user['username'];
+            $_SESSION['role'] = $user['role'];
 
-                if ($is_valid) {
-                    $_SESSION['user_name'] = $user['username'];
-                    $_SESSION['role'] = $user['role'];
-
-                    // ロールによって遷移先を分岐
-                    if ($user['role'] === 'student' || $user['role'] === 'child') {
-                        header('Location: siteA.php');
-                        exit;
-                    } elseif ($user['role'] === 'teacher') {
-                        header('Location: siteB.php');
-                        exit;
-                    } else {
-                        $error = "不明なロールが設定されています。";
-                    }
-                } else {
-                    $error = "パスワードが違います。";
-                }
+            // ロール別遷移処理
+            if ($user['role'] === 'teacher') {
+                header("Location: teacher_home.php");
+                exit;
+            } elseif ($user['role'] === 'student') {
+                header("Location: student_home.php");
+                exit;
+            } elseif ($user['role'] === 'admin') {
+                header("Location: admin_register.php");
+                exit;
             } else {
-                $error = "IDが存在しません。";
+                $error = "不明なロールが設定されています。";
             }
-        } catch (PDOException $e) {
-            $error = "データベースエラー: " . $e->getMessage();
+        } else {
+            $error = "ユーザー名またはパスワードが違います。";
         }
-    } else {
-        $error = "すべての項目を入力してください。";
+    } catch (PDOException $e) {
+        $error = "データベースエラー: " . $e->getMessage();
     }
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<title>ログイン画面</title>
-<style>
-body {
-    font-family: "Hiragino Kaku Gothic ProN", "メイリオ", sans-serif;
-    background-color: #f4f6f8;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-}
-.login-box {
-    background: #fff;
-    padding: 40px;
-    border-radius: 12px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    width: 350px;
-}
-h2 {
-    text-align: center;
-    color: #2c3e50;
-    margin-bottom: 20px;
-}
-input {
-    width: 100%;
-    padding: 10px;
-    margin-bottom: 15px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-size: 16px;
-}
-button {
-    width: 100%;
-    padding: 10px;
-    background-color: #0078d7;
-    color: white;
-    font-weight: bold;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-}
-button:hover {
-    background-color: #005fa3;
-}
-.error {
-    color: red;
-    text-align: center;
-    margin-bottom: 15px;
-}
-</style>
+    <meta charset="UTF-8">
+    <title>ログイン</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="login-box">
-        <h2>ログイン</h2>
+    <h2>ログイン</h2>
+    <?php if ($error): ?>
+        <p style="color:red;"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></p>
+    <?php endif; ?>
 
-        <?php if ($error): ?>
-            <p class="error"><?= htmlspecialchars($error) ?></p>
-        <?php endif; ?>
-
-        <form method="post">
-            <input type="text" name="username" placeholder="ログインID" required>
-            <input type="password" name="password" placeholder="パスワード" required>
-            <button type="submit">ログイン</button>
-        </form>
-    </div>
+    <form method="POST" action="">
+        <input type="text" name="username" placeholder="ユーザー名" required><br>
+        <input type="password" name="password" placeholder="パスワード" required><br>
+        <button type="submit">ログイン</button>
+    </form>
 </body>
 </html>
