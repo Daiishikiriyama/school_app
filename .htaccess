@@ -1,0 +1,3 @@
+# Allow basic PHP file access
+DirectoryIndex index.php
+Options -Indexes
