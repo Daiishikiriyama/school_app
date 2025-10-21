@@ -1,9 +1,0 @@
-# ルートでPHPを実行できるようにする
-DirectoryIndex login.php
-Options +FollowSymLinks
-RewriteEngine On
-
-# すべてのリクエストを login.php に送る（必要に応じて変更）
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^(.*)$ login.php [L,QSA]
