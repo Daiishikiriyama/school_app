@@ -1,18 +1,7 @@
 services:
   - type: web
     name: school_app
-    env: nixpacks
+    env: docker
     plan: free
     buildCommand: ""
-    startCommand: "php -S 0.0.0.0:$PORT login.php"
-    envVars:
-      - key: DB_HOST
-        sync: false
-      - key: DB_PORT
-        sync: false
-      - key: DB_NAME
-        sync: false
-      - key: DB_USER
-        sync: false
-      - key: DB_PASS
-        sync: false
+    startCommand: php -S 0.0.0.0:$PORT -t .
