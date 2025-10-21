@@ -1,10 +1,10 @@
 <?php
 // === データベース接続設定（Railway） ===
-$host = 'mysql.railway.internal';
+$host = 'metro.proxy.rlwy.net';
 $dbname = 'railway';
 $username = 'root';
 $password = 'vdVmRzsYYNYUVASOOdYqwKWiRotmWbpa';
-$port = 3306;
+$port = 20028;
 
 try {
     $pdo = new PDO(
