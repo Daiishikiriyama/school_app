@@ -1,4 +1,4 @@
-<?php 
+<?php
 session_start();
 require_once(__DIR__ . '/config.php'); // 安全に設定ファイルを読み込む
 
@@ -16,29 +16,39 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt->execute();
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            // 🔹 開発用：平文パスワードで照合
-            if ($user && $password === $user['password']) {
-                // ✅ セッション統一
-                $_SESSION['user_id'] = $user['id'];
-                $_SESSION['user_name'] = $user['name'];     // ← 表示用に追加
-                $_SESSION['user_role'] = $user['role'];     // ← siteA.phpと統一
-                $_SESSION['class_id'] = $user['class_id'];  // ← 生徒のクラス紐付け
+            if ($user) {
+                // ✅ パスワード照合（平文 or ハッシュ両対応）
+                $isPasswordValid = (
+                    $password === $user['password'] || 
+                    password_verify($password, $user['password'])
+                );
 
-                // ✅ ロール別遷移
-                if ($user['role'] === 'student') {
-                    header("Location: siteA.php");
-                    exit();
-                } elseif ($user['role'] === 'teacher') {
-                    header("Location: siteB.php");
-                    exit();
-                } elseif ($user['role'] === 'admin') {
-                    header("Location: admin_register.php");
-                    exit();
+                if ($isPasswordValid) {
+                    // ✅ セッション情報をセット
+                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['username'] = $user['username'];
+                    $_SESSION['role'] = $user['role'];
+                    $_SESSION['class_id'] = $user['class_id']; // ★ここが重要！
+                    $_SESSION['name'] = $user['name'] ?? '';
+
+                    // ✅ ロール別のリダイレクト
+                    if ($user['role'] === 'student') {
+                        header("Location: siteA.php");
+                        exit();
+                    } elseif ($user['role'] === 'teacher') {
+                        header("Location: siteB.php");
+                        exit();
+                    } elseif ($user['role'] === 'admin') {
+                        header("Location: admin_register.php");
+                        exit();
+                    } else {
+                        $error = "不明なロールが設定されています。";
+                    }
                 } else {
-                    $error = "不明なロールが設定されています。";
+                    $error = "ユーザー名またはパスワードが間違っています。";
                 }
             } else {
-                $error = "ユーザー名またはパスワードが間違っています。";
+                $error = "ユーザーが存在しません。";
             }
         } catch (PDOException $e) {
             $error = "データベースエラー：" . $e->getMessage();
