@@ -21,9 +21,14 @@ if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-// -------------------------
-// ユーザー削除処理
-// -------------------------
+// ----------------------
+// クラス一覧取得
+// ----------------------
+$classes = $pdo->query("SELECT id, class_name FROM classes ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+
+// ----------------------
+// 削除処理
+// ----------------------
 if (isset($_GET['delete'])) {
     $delete_id = (int)$_GET['delete'];
     $stmt = $pdo->prepare("DELETE FROM users WHERE id = :id");
@@ -33,24 +38,41 @@ if (isset($_GET['delete'])) {
     exit;
 }
 
-// -------------------------
+// ----------------------
 // CSV出力処理
-// -------------------------
+// ----------------------
 if (isset($_GET['export']) && $_GET['export'] === 'csv') {
-    header('Content-Type: text/csv; charset=UTF-8');
-    header('Content-Disposition: attachment; filename="users.csv"');
+    $keyword = $_GET['keyword'] ?? '';
+    $class_filter = $_GET['class_filter'] ?? '';
+    $params = [];
+    $conditions = [];
 
+    if ($keyword !== '') {
+        $conditions[] = "(username LIKE :kw OR name LIKE :kw OR role LIKE :kw)";
+        $params[':kw'] = "%$keyword%";
+    }
+    if ($class_filter !== '') {
+        $conditions[] = "class_id = :cid";
+        $params[':cid'] = (int)$class_filter;
+    }
+
+    $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
+    $sql = "SELECT id, username, name, role, class_id FROM users $where ORDER BY id ASC";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="users_filtered.csv"');
     $output = fopen('php://output', 'w');
     fputcsv($output, ['ID', 'ログインID', '表示名', 'ロール', 'クラスID']);
-    $stmt = $pdo->query("SELECT id, username, name, role, class_id FROM users ORDER BY id ASC");
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) fputcsv($output, $row);
     fclose($output);
     exit;
 }
 
-// -------------------------
+// ----------------------
 // 編集保存処理
-// -------------------------
+// ----------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_id'])) {
     $edit_id  = (int)$_POST['edit_id'];
     $name     = trim($_POST['edit_name']);
@@ -80,16 +102,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_id'])) {
     exit;
 }
 
-// -------------------------
-// ユーザー登録処理
-// -------------------------
+// ----------------------
+// 登録処理
+// ----------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['edit_id'])) {
-    if (empty($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
-        $_SESSION['err'] = '不正なリクエストです。';
-        header('Location: admin_register.php');
-        exit;
-    }
-
     $role = $_POST['role'] ?? '';
     $username = trim($_POST['username'] ?? '');
     $name = trim($_POST['name'] ?? '');
@@ -109,7 +125,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['edit_id'])) {
     if ($password !== $password2)
         $errors[] = 'パスワード（確認）が一致しません。';
 
-    // クラスチェック
     $classIdToSave = null;
     if ($role === 'student') {
         if ($class_id === '' || !ctype_digit($class_id))
@@ -120,7 +135,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['edit_id'])) {
         $classIdToSave = (int)$class_id;
     }
 
-    // 重複チェック
     if (!$errors) {
         $check = $pdo->prepare("SELECT COUNT(*) FROM users WHERE username = :u");
         $check->execute([':u' => $username]);
@@ -144,36 +158,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['edit_id'])) {
         header('Location: admin_register.php');
         exit;
     } else {
-        $_SESSION['err'] = implode("<br>", array_map(fn($m) => htmlspecialchars($m, ENT_QUOTES, 'UTF-8'), $errors));
+        $_SESSION['err'] = implode("<br>", array_map(fn($m)=>htmlspecialchars($m,ENT_QUOTES),$errors));
         header('Location: admin_register.php');
         exit;
     }
 }
 
-// -------------------------
-// データ取得（検索）
-$search_query = '';
-if (!empty($_GET['keyword'])) {
-    $search_query = trim($_GET['keyword']);
-    $stmt = $pdo->prepare("SELECT * FROM users WHERE username LIKE :q OR name LIKE :q OR role LIKE :q ORDER BY id ASC");
-    $stmt->execute([':q' => "%$search_query%"]);
-} else {
-    $stmt = $pdo->query("SELECT * FROM users ORDER BY id ASC");
+// ----------------------
+// 検索＋クラスフィルタ
+// ----------------------
+$keyword = $_GET['keyword'] ?? '';
+$class_filter = $_GET['class_filter'] ?? '';
+$params = [];
+$conditions = [];
+
+if ($keyword !== '') {
+    $conditions[] = "(username LIKE :kw OR name LIKE :kw OR role LIKE :kw)";
+    $params[':kw'] = "%$keyword%";
 }
+if ($class_filter !== '') {
+    $conditions[] = "class_id = :cid";
+    $params[':cid'] = (int)$class_filter;
+}
+$where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
+
+$sql = "SELECT * FROM users $where ORDER BY id ASC";
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// クラス一覧
-$classes = $pdo->query("SELECT id, class_name FROM classes ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
-
 // フラッシュメッセージ
-$flash = function ($key) {
-    if (!empty($_SESSION[$key])) {
-        $msg = $_SESSION[$key];
-        unset($_SESSION[$key]);
-        return $msg;
-    }
-    return '';
-};
+$flash = fn($key) => $_SESSION[$key] ?? '';
+unset($_SESSION['ok'], $_SESSION['err']);
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -186,7 +202,6 @@ body{font-family:"Hiragino Kaku Gothic ProN","メイリオ",sans-serif;backgroun
 header{background:#0d5bd7;color:#fff;padding:16px;text-align:center;font-weight:700;position:relative}
 .logout-btn{position:absolute;right:20px;top:16px;background:#fff;color:#0d5bd7;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-weight:700}
 .container{max-width:960px;margin:24px auto;background:#fff;padding:24px;border-radius:12px;box-shadow:0 10px 20px rgba(0,0,0,.06)}
-h2{margin-top:40px}
 table{width:100%;border-collapse:collapse;margin-top:20px}
 th,td{border:1px solid #ccc;padding:8px;text-align:left}
 th{background:#e8f0fe}
@@ -208,8 +223,8 @@ form.inline{display:inline}
 <div class="container">
 
 <h1>新規ユーザー登録</h1>
-<?php if ($msg = $flash('ok')): ?><div class="msg-ok"><?= $msg ?></div><?php endif; ?>
-<?php if ($msg = $flash('err')): ?><div class="msg-err"><?= $msg ?></div><?php endif; ?>
+<?php if ($msg = $flash('ok')): ?><div style="color:green"><?= $msg ?></div><?php endif; ?>
+<?php if ($msg = $flash('err')): ?><div style="color:red"><?= $msg ?></div><?php endif; ?>
 
 <form method="post" action="admin_register.php" autocomplete="off">
     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES); ?>">
@@ -238,12 +253,21 @@ form.inline{display:inline}
     <button class="btn" type="submit">登録する</button>
 </form>
 
-<h2>登録済みユーザー一覧</h2>
+<h2 style="margin-top:40px;">登録済みユーザー一覧</h2>
+
 <form method="get" action="admin_register.php" style="margin-bottom:12px;">
-    <input type="text" name="keyword" value="<?= htmlspecialchars($search_query,ENT_QUOTES) ?>" placeholder="名前・ID・ロールで検索" style="width:60%;padding:8px;">
-    <button class="btn">検索</button>
+    <input type="text" name="keyword" value="<?= htmlspecialchars($keyword,ENT_QUOTES) ?>" placeholder="名前・ID・ロールで検索" style="width:40%;padding:8px;">
+    <select name="class_filter" style="padding:8px;">
+        <option value="">全クラス</option>
+        <?php foreach ($classes as $c): ?>
+            <option value="<?= $c['id'] ?>" <?= ($class_filter==$c['id'])?'selected':'' ?>>
+                <?= htmlspecialchars($c['class_name'],ENT_QUOTES) ?>
+            </option>
+        <?php endforeach; ?>
+    </select>
+    <button class="btn">絞り込み</button>
     <a href="admin_register.php" class="btn">リセット</a>
-    <a href="admin_register.php?export=csv" class="btn">CSV出力</a>
+    <a href="admin_register.php?export=csv&keyword=<?= urlencode($keyword) ?>&class_filter=<?= urlencode($class_filter) ?>" class="btn">CSV出力</a>
 </form>
 
 <table>
@@ -296,3 +320,4 @@ form.inline{display:inline}
 </div>
 </body>
 </html>
+
