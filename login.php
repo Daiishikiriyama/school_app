@@ -1,4 +1,4 @@
-<?php
+<?php 
 session_start();
 require_once(__DIR__ . '/config.php'); // 安全に設定ファイルを読み込む
 
@@ -18,10 +18,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
             // 🔹 開発用：平文パスワードで照合
             if ($user && $password === $user['password']) {
+                // ✅ セッション統一
                 $_SESSION['user_id'] = $user['id'];
-                $_SESSION['username'] = $user['username'];
-                $_SESSION['role'] = $user['role'];
+                $_SESSION['user_name'] = $user['name'];     // ← 表示用に追加
+                $_SESSION['user_role'] = $user['role'];     // ← siteA.phpと統一
+                $_SESSION['class_id'] = $user['class_id'];  // ← 生徒のクラス紐付け
 
+                // ✅ ロール別遷移
                 if ($user['role'] === 'student') {
                     header("Location: siteA.php");
                     exit();
