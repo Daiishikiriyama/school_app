@@ -21,7 +21,9 @@ if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-// 削除処理
+// -------------------------
+// ユーザー削除処理
+// -------------------------
 if (isset($_GET['delete'])) {
     $delete_id = (int)$_GET['delete'];
     $stmt = $pdo->prepare("DELETE FROM users WHERE id = :id");
@@ -31,7 +33,9 @@ if (isset($_GET['delete'])) {
     exit;
 }
 
+// -------------------------
 // CSV出力処理
+// -------------------------
 if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     header('Content-Type: text/csv; charset=UTF-8');
     header('Content-Disposition: attachment; filename="users.csv"');
@@ -44,7 +48,9 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     exit;
 }
 
-// 編集更新処理
+// -------------------------
+// 編集保存処理
+// -------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_id'])) {
     $edit_id  = (int)$_POST['edit_id'];
     $name     = trim($_POST['edit_name']);
@@ -74,7 +80,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_id'])) {
     exit;
 }
 
-// 検索
+// -------------------------
+// ユーザー登録処理
+// -------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['edit_id'])) {
+    if (empty($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        $_SESSION['err'] = '不正なリクエストです。';
+        header('Location: admin_register.php');
+        exit;
+    }
+
+    $role = $_POST['role'] ?? '';
+    $username = trim($_POST['username'] ?? '');
+    $name = trim($_POST['name'] ?? '');
+    $password = $_POST['password'] ?? '';
+    $password2 = $_POST['password2'] ?? '';
+    $class_id = $_POST['class_id'] ?? '';
+
+    $errors = [];
+    $validRoles = ['admin', 'teacher', 'student'];
+    if (!in_array($role, $validRoles, true)) $errors[] = 'ロールが不正です。';
+    if ($username === '' || !preg_match('/^[a-zA-Z0-9_\-]{3,50}$/', $username))
+        $errors[] = 'ログインIDは半角英数字・アンダーバー・ハイフンで3〜50文字にしてください。';
+    if ($name === '' || mb_strlen($name) > 100)
+        $errors[] = '表示名は1〜100文字で入力してください。';
+    if (strlen($password) < 6)
+        $errors[] = 'パスワードは6文字以上にしてください。';
+    if ($password !== $password2)
+        $errors[] = 'パスワード（確認）が一致しません。';
+
+    // クラスチェック
+    $classIdToSave = null;
+    if ($role === 'student') {
+        if ($class_id === '' || !ctype_digit($class_id))
+            $errors[] = '生徒登録にはクラスの選択が必須です。';
+        else
+            $classIdToSave = (int)$class_id;
+    } elseif ($role === 'teacher' && ctype_digit($class_id)) {
+        $classIdToSave = (int)$class_id;
+    }
+
+    // 重複チェック
+    if (!$errors) {
+        $check = $pdo->prepare("SELECT COUNT(*) FROM users WHERE username = :u");
+        $check->execute([':u' => $username]);
+        if ($check->fetchColumn() > 0) $errors[] = 'このログインIDはすでに使われています。';
+    }
+
+    if (!$errors) {
+        $hash = password_hash($password, PASSWORD_DEFAULT);
+        $sql = "INSERT INTO users (username, password, role, class_id, name)
+                VALUES (:username, :password, :role, :class_id, :name)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->bindValue(':username', $username);
+        $stmt->bindValue(':password', $hash);
+        $stmt->bindValue(':role', $role);
+        if ($classIdToSave === null) $stmt->bindValue(':class_id', null, PDO::PARAM_NULL);
+        else $stmt->bindValue(':class_id', $classIdToSave, PDO::PARAM_INT);
+        $stmt->bindValue(':name', $name);
+        $stmt->execute();
+
+        $_SESSION['ok'] = 'ユーザーを登録しました。';
+        header('Location: admin_register.php');
+        exit;
+    } else {
+        $_SESSION['err'] = implode("<br>", array_map(fn($m) => htmlspecialchars($m, ENT_QUOTES, 'UTF-8'), $errors));
+        header('Location: admin_register.php');
+        exit;
+    }
+}
+
+// -------------------------
+// データ取得（検索）
 $search_query = '';
 if (!empty($_GET['keyword'])) {
     $search_query = trim($_GET['keyword']);
@@ -85,7 +162,7 @@ if (!empty($_GET['keyword'])) {
 }
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// クラス一覧取得
+// クラス一覧
 $classes = $pdo->query("SELECT id, class_name FROM classes ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 // フラッシュメッセージ
@@ -108,7 +185,8 @@ $flash = function ($key) {
 body{font-family:"Hiragino Kaku Gothic ProN","メイリオ",sans-serif;background:#f6f8fb;margin:0}
 header{background:#0d5bd7;color:#fff;padding:16px;text-align:center;font-weight:700;position:relative}
 .logout-btn{position:absolute;right:20px;top:16px;background:#fff;color:#0d5bd7;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-weight:700}
-.container{max-width:900px;margin:24px auto;background:#fff;padding:24px;border-radius:12px;box-shadow:0 10px 20px rgba(0,0,0,.06)}
+.container{max-width:960px;margin:24px auto;background:#fff;padding:24px;border-radius:12px;box-shadow:0 10px 20px rgba(0,0,0,.06)}
+h2{margin-top:40px}
 table{width:100%;border-collapse:collapse;margin-top:20px}
 th,td{border:1px solid #ccc;padding:8px;text-align:left}
 th{background:#e8f0fe}
@@ -116,8 +194,6 @@ th{background:#e8f0fe}
 .delete-btn{background:#f44336}
 .edit-btn{background:#ff9800}
 form.inline{display:inline}
-.msg-ok{background:#e8f5ff;color:#075aa0;border:1px solid #b8dcff;padding:10px;border-radius:8px;margin-bottom:12px}
-.msg-err{background:#ffeeee;color:#a00;border:1px solid #ffc9c9;padding:10px;border-radius:8px;margin-bottom:12px}
 .edit-form{background:#f9f9ff;padding:12px;border:1px solid #ccd;border-radius:8px;margin-top:8px}
 </style>
 </head>
@@ -130,63 +206,93 @@ form.inline{display:inline}
 </header>
 
 <div class="container">
-    <h1>登録済みユーザー一覧</h1>
-    <?php if ($msg = $flash('ok')): ?><div class="msg-ok"><?= $msg ?></div><?php endif; ?>
-    <?php if ($msg = $flash('err')): ?><div class="msg-err"><?= $msg ?></div><?php endif; ?>
 
-    <form method="get" action="admin_register.php" style="margin-bottom:12px;">
-        <input type="text" name="keyword" value="<?= htmlspecialchars($search_query,ENT_QUOTES) ?>" placeholder="名前・ID・ロールで検索" style="width:60%;padding:8px;">
-        <button class="btn">検索</button>
-        <a href="admin_register.php" class="btn">リセット</a>
-        <a href="admin_register.php?export=csv" class="btn">CSV出力</a>
-    </form>
+<h1>新規ユーザー登録</h1>
+<?php if ($msg = $flash('ok')): ?><div class="msg-ok"><?= $msg ?></div><?php endif; ?>
+<?php if ($msg = $flash('err')): ?><div class="msg-err"><?= $msg ?></div><?php endif; ?>
 
-    <table>
-        <tr><th>ID</th><th>ログインID</th><th>表示名</th><th>ロール</th><th>クラス</th><th>操作</th></tr>
-        <?php foreach ($users as $u): ?>
-        <tr>
-            <td><?= (int)$u['id'] ?></td>
-            <td><?= htmlspecialchars($u['username'],ENT_QUOTES) ?></td>
-            <td><?= htmlspecialchars($u['name'],ENT_QUOTES) ?></td>
-            <td><?= htmlspecialchars($u['role'],ENT_QUOTES) ?></td>
-            <td><?= htmlspecialchars($u['class_id'] ?? '-',ENT_QUOTES) ?></td>
-            <td>
-                <form method="get" action="admin_register.php" class="inline">
-                    <input type="hidden" name="edit" value="<?= $u['id'] ?>">
-                    <button class="btn edit-btn" type="submit">編集</button>
-                </form>
-                <a href="admin_register.php?delete=<?= $u['id'] ?>" onclick="return confirm('削除してよろしいですか？');" class="btn delete-btn">削除</a>
-            </td>
-        </tr>
-        <?php if (isset($_GET['edit']) && $_GET['edit'] == $u['id']): ?>
-        <tr><td colspan="6">
-            <form method="post" action="admin_register.php" class="edit-form">
-                <input type="hidden" name="edit_id" value="<?= $u['id'] ?>">
-                <label>表示名：</label>
-                <input type="text" name="edit_name" value="<?= htmlspecialchars($u['name'],ENT_QUOTES) ?>" required><br>
-                <label>ロール：</label>
-                <select name="edit_role">
-                    <option value="student" <?= $u['role']=='student'?'selected':'' ?>>生徒</option>
-                    <option value="teacher" <?= $u['role']=='teacher'?'selected':'' ?>>先生</option>
-                    <option value="admin" <?= $u['role']=='admin'?'selected':'' ?>>管理者</option>
-                </select><br>
-                <label>クラス：</label>
-                <select name="edit_class_id">
-                    <option value="">未設定</option>
-                    <?php foreach ($classes as $c): ?>
-                        <option value="<?= $c['id'] ?>" <?= $u['class_id']==$c['id']?'selected':'' ?>>
-                            <?= htmlspecialchars($c['class_name'],ENT_QUOTES) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select><br>
-                <label>パスワード変更（任意）：</label>
-                <input type="password" name="edit_password" placeholder="変更しない場合は空欄"><br>
-                <button class="btn" type="submit">保存</button>
-            </form>
-        </td></tr>
-        <?php endif; ?>
+<form method="post" action="admin_register.php" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES); ?>">
+    <label>ロール：</label>
+    <select name="role" required>
+        <option value="">選択してください</option>
+        <option value="student">生徒</option>
+        <option value="teacher">先生</option>
+        <option value="admin">管理者</option>
+    </select>
+    <label>クラス（任意 / 生徒は必須）</label>
+    <select name="class_id">
+        <option value="">クラスを選択</option>
+        <?php foreach ($classes as $c): ?>
+            <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['class_name'], ENT_QUOTES) ?></option>
         <?php endforeach; ?>
-    </table>
+    </select>
+    <label>ログインID</label>
+    <input type="text" name="username" required>
+    <label>表示名</label>
+    <input type="text" name="name" required>
+    <label>パスワード</label>
+    <input type="password" name="password" required>
+    <label>パスワード（確認）</label>
+    <input type="password" name="password2" required>
+    <button class="btn" type="submit">登録する</button>
+</form>
+
+<h2>登録済みユーザー一覧</h2>
+<form method="get" action="admin_register.php" style="margin-bottom:12px;">
+    <input type="text" name="keyword" value="<?= htmlspecialchars($search_query,ENT_QUOTES) ?>" placeholder="名前・ID・ロールで検索" style="width:60%;padding:8px;">
+    <button class="btn">検索</button>
+    <a href="admin_register.php" class="btn">リセット</a>
+    <a href="admin_register.php?export=csv" class="btn">CSV出力</a>
+</form>
+
+<table>
+<tr><th>ID</th><th>ログインID</th><th>表示名</th><th>ロール</th><th>クラス</th><th>操作</th></tr>
+<?php foreach ($users as $u): ?>
+<tr>
+<td><?= (int)$u['id'] ?></td>
+<td><?= htmlspecialchars($u['username'],ENT_QUOTES) ?></td>
+<td><?= htmlspecialchars($u['name'],ENT_QUOTES) ?></td>
+<td><?= htmlspecialchars($u['role'],ENT_QUOTES) ?></td>
+<td><?= htmlspecialchars($u['class_id'] ?? '-',ENT_QUOTES) ?></td>
+<td>
+<form method="get" action="admin_register.php" class="inline">
+    <input type="hidden" name="edit" value="<?= $u['id'] ?>">
+    <button class="btn edit-btn" type="submit">編集</button>
+</form>
+<a href="admin_register.php?delete=<?= $u['id'] ?>" onclick="return confirm('削除してよろしいですか？');" class="btn delete-btn">削除</a>
+</td>
+</tr>
+<?php if (isset($_GET['edit']) && $_GET['edit'] == $u['id']): ?>
+<tr><td colspan="6">
+<form method="post" action="admin_register.php" class="edit-form">
+<input type="hidden" name="edit_id" value="<?= $u['id'] ?>">
+<label>表示名：</label>
+<input type="text" name="edit_name" value="<?= htmlspecialchars($u['name'],ENT_QUOTES) ?>" required><br>
+<label>ロール：</label>
+<select name="edit_role">
+<option value="student" <?= $u['role']=='student'?'selected':'' ?>>生徒</option>
+<option value="teacher" <?= $u['role']=='teacher'?'selected':'' ?>>先生</option>
+<option value="admin" <?= $u['role']=='admin'?'selected':'' ?>>管理者</option>
+</select><br>
+<label>クラス：</label>
+<select name="edit_class_id">
+<option value="">未設定</option>
+<?php foreach ($classes as $c): ?>
+<option value="<?= $c['id'] ?>" <?= $u['class_id']==$c['id']?'selected':'' ?>>
+<?= htmlspecialchars($c['class_name'],ENT_QUOTES) ?>
+</option>
+<?php endforeach; ?>
+</select><br>
+<label>パスワード変更（任意）：</label>
+<input type="password" name="edit_password" placeholder="変更しない場合は空欄"><br>
+<button class="btn" type="submit">保存</button>
+</form>
+</td></tr>
+<?php endif; ?>
+<?php endforeach; ?>
+</table>
+
 </div>
 </body>
 </html>
