@@ -5,61 +5,89 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 // ---------------------------------------------
-// 集計関数（上位N件）
+// ログインチェックとクラスID取得
 // ---------------------------------------------
-function getTopN($pdo, $column, $timeCategory, $limit = 5) {
-    $stmt = $pdo->prepare("
-        SELECT $column AS item, COUNT(*) AS cnt
-        FROM student_entries
-        WHERE ($column IS NOT NULL AND $column != '')
-          AND (
-            time_category = :time OR
-            time_category1 = :time OR
-            time_category2 = :time OR
-            time_category3 = :time
-          )
-        GROUP BY $column
+if (!isset($_SESSION['user_id'])) {
+    echo "ログイン情報がありません。再ログインしてください。";
+    exit;
+}
+
+$user_id = $_SESSION['user_id'];
+
+// ログインユーザーのclass_idを取得
+$stmt = $pdo->prepare("SELECT class_id FROM users WHERE id = :id");
+$stmt->execute([':id' => $user_id]);
+$user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$user || !$user['class_id']) {
+    echo "担当クラスが設定されていません。管理者にお問い合わせください。";
+    exit;
+}
+
+$class_id = $user['class_id'];  // ← ログイン中のクラスのみを対象に集計
+
+// ---------------------------------------------
+// 上位N件を取得（how_use1～3対応）
+// ---------------------------------------------
+function getTopN($pdo, $columnBase, $timeCategory, $class_id, $limit = 5) {
+    $sql = "
+        SELECT val AS item, COUNT(*) AS cnt FROM (
+            SELECT {$columnBase}1 AS val, time_category1 AS tc, class_id FROM student_entries
+            UNION ALL
+            SELECT {$columnBase}2 AS val, time_category2 AS tc, class_id FROM student_entries
+            UNION ALL
+            SELECT {$columnBase}3 AS val, time_category3 AS tc, class_id FROM student_entries
+        ) t
+        WHERE val IS NOT NULL AND val != ''
+          AND tc = :time
+          AND class_id = :class_id
+        GROUP BY val
         ORDER BY cnt DESC
         LIMIT $limit
-    ");
-    $stmt->execute([':time' => $timeCategory]);
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([':time' => $timeCategory, ':class_id' => $class_id]);
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 // ---------------------------------------------
 // 「なに × したい」の組み合わせランキング
 // ---------------------------------------------
-function getCombinedTop($pdo, $timeCategory, $limit = 5) {
-    $stmt = $pdo->prepare("
-        SELECT CONCAT_WS(' × ', what_use, want_do) AS combo, COUNT(*) AS cnt
-        FROM student_entries
-        WHERE (what_use IS NOT NULL AND want_do IS NOT NULL)
-          AND (
-            time_category = :time OR
-            time_category1 = :time OR
-            time_category2 = :time OR
-            time_category3 = :time
-          )
+function getCombinedTop($pdo, $timeCategory, $class_id, $limit = 5) {
+    $sql = "
+        SELECT CONCAT_WS(' × ', what_use, want_do) AS combo, COUNT(*) AS cnt FROM (
+            SELECT what_use1 AS what_use, want_do1 AS want_do, time_category1 AS tc, class_id FROM student_entries
+            UNION ALL
+            SELECT what_use2, want_do2, time_category2, class_id FROM student_entries
+            UNION ALL
+            SELECT what_use3, want_do3, time_category3, class_id FROM student_entries
+        ) t
+        WHERE what_use IS NOT NULL AND want_do IS NOT NULL
+          AND what_use != '' AND want_do != ''
+          AND tc = :time
+          AND class_id = :class_id
         GROUP BY combo
         ORDER BY cnt DESC
         LIMIT $limit
-    ");
-    $stmt->execute([':time' => $timeCategory]);
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([':time' => $timeCategory, ':class_id' => $class_id]);
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 // ---------------------------------------------
-// 教員コメント取得（各時間帯の最新1件）
+// 教員コメント取得（各時間帯の最新1件／クラス別）
 // ---------------------------------------------
-function getTeacherComment($pdo, $timeCategory) {
+function getTeacherComment($pdo, $timeCategory, $class_id) {
     $stmt = $pdo->prepare("
         SELECT comment_text
         FROM teacher_comments
         WHERE time_category = :time
+          AND class_id = :class_id
         ORDER BY created_at DESC
         LIMIT 1
     ");
-    $stmt->execute([':time' => $timeCategory]);
+    $stmt->execute([':time' => $timeCategory, ':class_id' => $class_id]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     return $row ? $row['comment_text'] : null;
 }
@@ -70,7 +98,7 @@ function getTeacherComment($pdo, $timeCategory) {
 $timeCategories = ["休み時間", "授業の時間", "家での時間"];
 
 // ---------------------------------------------
-// 統計情報
+// 統計情報（クラス別）
 // ---------------------------------------------
 $total = 0;
 $timeStats = [];
@@ -78,14 +106,13 @@ foreach ($timeCategories as $time) {
     $stmt = $pdo->prepare("
         SELECT COUNT(*) AS cnt
         FROM student_entries
-        WHERE (
-            time_category = :time OR
+        WHERE class_id = :class_id AND (
             time_category1 = :time OR
             time_category2 = :time OR
             time_category3 = :time
         )
     ");
-    $stmt->execute([':time' => $time]);
+    $stmt->execute([':class_id' => $class_id, ':time' => $time]);
     $count = $stmt->fetchColumn();
     $timeStats[$time] = $count;
     $total += $count;
@@ -93,14 +120,14 @@ foreach ($timeCategories as $time) {
 $mostActive = array_search(max($timeStats), $timeStats);
 
 // ---------------------------------------------
-// データまとめ
+// 各時間帯のランキングデータ取得
 // ---------------------------------------------
 $data = [];
 foreach ($timeCategories as $time) {
     $data[$time] = [
-        'how_use' => getTopN($pdo, 'how_use', $time, 3),
-        'what_do' => getCombinedTop($pdo, $time, 5),
-        'teacher_comment' => getTeacherComment($pdo, $time)
+        'how_use' => getTopN($pdo, 'how_use', $time, $class_id, 3),
+        'what_do' => getCombinedTop($pdo, $time, $class_id, 5),
+        'teacher_comment' => getTeacherComment($pdo, $time, $class_id)
     ];
 }
 ?>
@@ -174,7 +201,7 @@ li {
 
 <!-- 📊 概要情報 -->
 <div class="stats">
-    <h2>📊 概要・統計情報</h2>
+    <h2>📊 概要・統計情報（このクラスのみ）</h2>
     <p>全体入力件数：<?= $total ?>件</p>
     <ul>
         <?php foreach ($timeStats as $time => $cnt): ?>
