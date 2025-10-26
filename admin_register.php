@@ -62,7 +62,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     $stmt->execute($params);
 
     header('Content-Type: text/csv; charset=UTF-8');
-    header('Content-Disposition: attachment; filename="users_filtered.csv"');
+    header('Content-Disposition: attachment; filename=\"users_filtered.csv\"');
     $output = fopen('php://output', 'w');
     fputcsv($output, ['ID', 'ログインID', '表示名', 'ロール', 'クラスID']);
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) fputcsv($output, $row);
@@ -103,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_id'])) {
 }
 
 // ----------------------
-// 登録処理
+// 登録処理（改良版）
 // ----------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['edit_id'])) {
     $role = $_POST['role'] ?? '';
@@ -115,16 +115,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['edit_id'])) {
 
     $errors = [];
     $validRoles = ['admin', 'teacher', 'student'];
-    if (!in_array($role, $validRoles, true)) $errors[] = 'ロールが不正です。';
-    if ($username === '' || !preg_match('/^[a-zA-Z0-9_\-]{3,50}$/', $username))
-        $errors[] = 'ログインIDは半角英数字・アンダーバー・ハイフンで3〜50文字にしてください。';
+
+    // --- バリデーション ---
+    if (!in_array($role, $validRoles, true)) $errors[] = 'ロールを選択してください。';
+    if ($username === '' || !preg_match('/^[0-9]{4,}$/', $username))
+        $errors[] = 'ログインIDは4桁以上の数字で入力してください。';
     if ($name === '' || mb_strlen($name) > 100)
         $errors[] = '表示名は1〜100文字で入力してください。';
-    if (strlen($password) < 6)
-        $errors[] = 'パスワードは6文字以上にしてください。';
+    if (!preg_match('/^[0-9]{4,}$/', $password))
+        $errors[] = 'パスワードは4桁以上の数字で入力してください。';
     if ($password !== $password2)
         $errors[] = 'パスワード（確認）が一致しません。';
 
+    // --- クラス指定 ---
     $classIdToSave = null;
     if ($role === 'student') {
         if ($class_id === '' || !ctype_digit($class_id))
@@ -135,12 +138,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['edit_id'])) {
         $classIdToSave = (int)$class_id;
     }
 
+    // --- ログインIDの重複確認 ---
     if (!$errors) {
         $check = $pdo->prepare("SELECT COUNT(*) FROM users WHERE username = :u");
         $check->execute([':u' => $username]);
         if ($check->fetchColumn() > 0) $errors[] = 'このログインIDはすでに使われています。';
     }
 
+    // --- エラーがなければ登録 ---
     if (!$errors) {
         $hash = password_hash($password, PASSWORD_DEFAULT);
         $sql = "INSERT INTO users (username, password, role, class_id, name)
@@ -154,7 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['edit_id'])) {
         $stmt->bindValue(':name', $name);
         $stmt->execute();
 
-        $_SESSION['ok'] = 'ユーザーを登録しました。';
+        $_SESSION['ok'] = '✅ ユーザーを登録しました。';
         header('Location: admin_register.php');
         exit;
     } else {
@@ -210,6 +215,9 @@ th{background:#e8f0fe}
 .edit-btn{background:#ff9800}
 form.inline{display:inline}
 .edit-form{background:#f9f9ff;padding:12px;border:1px solid #ccd;border-radius:8px;margin-top:8px}
+.message{margin:10px 0;padding:10px;border-radius:8px}
+.message.green{background:#e8f5e9;color:#2e7d32}
+.message.red{background:#ffebee;color:#c62828}
 </style>
 </head>
 <body>
@@ -223,8 +231,8 @@ form.inline{display:inline}
 <div class="container">
 
 <h1>新規ユーザー登録</h1>
-<?php if ($msg = $flash('ok')): ?><div style="color:green"><?= $msg ?></div><?php endif; ?>
-<?php if ($msg = $flash('err')): ?><div style="color:red"><?= $msg ?></div><?php endif; ?>
+<?php if ($msg = $flash('ok')): ?><div class="message green"><?= $msg ?></div><?php endif; ?>
+<?php if ($msg = $flash('err')): ?><div class="message red"><?= $msg ?></div><?php endif; ?>
 
 <form method="post" action="admin_register.php" autocomplete="off">
     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES); ?>">
@@ -242,11 +250,11 @@ form.inline{display:inline}
             <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['class_name'], ENT_QUOTES) ?></option>
         <?php endforeach; ?>
     </select>
-    <label>ログインID</label>
+    <label>ログインID（4桁以上の数字）</label>
     <input type="text" name="username" required>
     <label>表示名</label>
     <input type="text" name="name" required>
-    <label>パスワード</label>
+    <label>パスワード（4桁以上の数字）</label>
     <input type="password" name="password" required>
     <label>パスワード（確認）</label>
     <input type="password" name="password2" required>
@@ -320,4 +328,3 @@ form.inline{display:inline}
 </div>
 </body>
 </html>
-
