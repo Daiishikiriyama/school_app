@@ -62,7 +62,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     $stmt->execute($params);
 
     header('Content-Type: text/csv; charset=UTF-8');
-    header('Content-Disposition: attachment; filename=\"users_filtered.csv\"');
+    header('Content-Disposition: attachment; filename="users_filtered.csv"');
     $output = fopen('php://output', 'w');
     fputcsv($output, ['ID', 'ログインID', '表示名', 'ロール', 'クラスID']);
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) fputcsv($output, $row);
@@ -200,49 +200,32 @@ unset($_SESSION['ok'], $_SESSION['err']);
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body{font-family:"Hiragino Kaku Gothic ProN","メイリオ",sans-serif;background:#f6f8fb;margin:0}
-header{background:#0d5bd7;color:#fff;padding:16px;text-align:center;font-weight:700;position:relative}
-.logout-btn{position:absolute;right:20px;top:16px;background:#fff;color:#0d5bd7;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-weight:700}
+header{background:#0d5bd7;color:#fff;padding:16px;text-align:center;font-weight:700;}
+nav{background:#e8f0fe;padding:10px;text-align:center;font-weight:600;}
+nav a{margin:0 10px;text-decoration:none;color:#0d5bd7;}
+nav a.logout{color:red;}
 .container{max-width:960px;margin:24px auto;background:#fff;padding:24px;border-radius:12px;box-shadow:0 10px 20px rgba(0,0,0,.06)}
 .message{margin:10px 0;padding:10px;border-radius:8px}
 .message.green{background:#e8f5e9;color:#2e7d32}
 .message.red{background:#ffebee;color:#c62828}
-form {
-    background: #f9fbff;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-    max-width:600px;
-    margin:auto;
-}
-.form-section {margin-bottom:16px;}
-.form-section label {
-    display:block;
-    font-weight:bold;
-    margin-bottom:6px;
-}
-.form-section input, .form-section select {
-    width:100%;
-    padding:8px;
-    border:1px solid #ccc;
-    border-radius:6px;
-    font-size:15px;
-}
 .btn{display:inline-block;background:#0d5bd7;color:#fff;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer;text-decoration:none}
 .delete-btn{background:#f44336}
 .edit-btn{background:#ff9800}
+form.inline{display:inline}
+.edit-form{background:#f9f9ff;padding:12px;border:1px solid #ccd;border-radius:8px;margin-top:8px}
 table{width:100%;border-collapse:collapse;margin-top:20px}
 th,td{border:1px solid #ccc;padding:8px;text-align:left}
 th{background:#e8f0fe}
-.edit-form{background:#f9f9ff;padding:12px;border:1px solid #ccd;border-radius:8px;margin-top:8px}
 </style>
 </head>
 <body>
-<header>
-管理者：ユーザー管理
-<form method="get" action="admin_register.php" style="display:inline;">
-    <button class="logout-btn" name="logout" value="1">ログアウト</button>
-</form>
-</header>
+<header>管理者：ユーザー管理</header>
+<nav>
+    <a href="admin_dashboard.php">📊 ダッシュボード</a> |
+    <a href="admin_register.php">👥 ユーザー管理</a> |
+    <a href="admin_classes.php">🏫 クラス管理</a> |
+    <a href="login.php?logout=1" class="logout">🚪 ログアウト</a>
+</nav>
 
 <div class="container">
 
@@ -252,54 +235,32 @@ th{background:#e8f0fe}
 
 <form method="post" action="admin_register.php" autocomplete="off">
     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES); ?>">
-
-    <div class="form-section">
-        <label for="role">ロール：</label>
-        <select name="role" id="role" required>
-            <option value="">選択してください</option>
-            <option value="student">生徒</option>
-            <option value="teacher">先生</option>
-            <option value="admin">管理者</option>
-        </select>
-    </div>
-
-    <div class="form-section">
-        <label for="class_id">クラス（任意 / 生徒は必須）：</label>
-        <select name="class_id" id="class_id">
-            <option value="">クラスを選択</option>
-            <?php foreach ($classes as $c): ?>
-                <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['class_name'], ENT_QUOTES) ?></option>
-            <?php endforeach; ?>
-        </select>
-    </div>
-
-    <div class="form-section">
-        <label for="username">ログインID（4桁以上の数字）</label>
-        <input type="text" name="username" id="username" placeholder="例：2201" required>
-    </div>
-
-    <div class="form-section">
-        <label for="name">表示名</label>
-        <input type="text" name="name" id="name" placeholder="例：山田太郎" required>
-    </div>
-
-    <div class="form-section">
-        <label for="password">パスワード（4桁以上の数字）</label>
-        <input type="password" name="password" id="password" placeholder="例：2201" required>
-    </div>
-
-    <div class="form-section">
-        <label for="password2">パスワード（確認）</label>
-        <input type="password" name="password2" id="password2" placeholder="もう一度入力" required>
-    </div>
-
-    <div style="text-align:center;margin-top:20px;">
-        <button class="btn" type="submit">登録する</button>
-    </div>
+    <label>ロール：</label>
+    <select name="role" required>
+        <option value="">選択してください</option>
+        <option value="student">生徒</option>
+        <option value="teacher">先生</option>
+        <option value="admin">管理者</option>
+    </select>
+    <label>クラス（任意 / 生徒は必須）</label>
+    <select name="class_id">
+        <option value="">クラスを選択</option>
+        <?php foreach ($classes as $c): ?>
+            <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['class_name'], ENT_QUOTES) ?></option>
+        <?php endforeach; ?>
+    </select>
+    <label>ログインID（4桁以上の数字）</label>
+    <input type="text" name="username" required>
+    <label>表示名</label>
+    <input type="text" name="name" required>
+    <label>パスワード（4桁以上の数字）</label>
+    <input type="password" name="password" required>
+    <label>パスワード（確認）</label>
+    <input type="password" name="password2" required>
+    <button class="btn" type="submit">登録する</button>
 </form>
 
 <h2 style="margin-top:40px;">登録済みユーザー一覧</h2>
-
 <form method="get" action="admin_register.php" style="margin-bottom:12px;">
     <input type="text" name="keyword" value="<?= htmlspecialchars($keyword,ENT_QUOTES) ?>" placeholder="名前・ID・ロールで検索" style="width:40%;padding:8px;">
     <select name="class_filter" style="padding:8px;">
