@@ -22,9 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_type'], $_POST
     $stmt->execute([':id' => $classId]);
     $className = $stmt->fetchColumn() ?: '未設定クラス';
 
-    // 出力タイプによるSQL分岐
     if ($exportType === 'student') {
-        // ✅ student_entries（子ども入力データ）
         $sql = "SELECT 
                     id, user_id, class_id, time_category, entry_text,
                     how_use1, what_use1, want_do1,
@@ -37,42 +35,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_type'], $_POST
                 FROM student_entries
                 WHERE class_id = :cid
                 ORDER BY created_at ASC";
-
         $filename = "student_entries_{$className}_" . date('Ymd_His') . ".csv";
-
     } elseif ($exportType === 'teacher') {
-        // ✅ teacher_comments（先生入力データ）
         $sql = "SELECT 
                     id, teacher_id, class_id, time_category, comment_text, created_at
                 FROM teacher_comments
                 WHERE class_id = :cid
                 ORDER BY created_at ASC";
-
         $filename = "teacher_comments_{$className}_" . date('Ymd_His') . ".csv";
-
     } else {
         exit('不正な出力タイプです。');
     }
 
-    // データ取得
     $stmt = $pdo->prepare($sql);
     $stmt->execute([':cid' => $classId]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // CSV出力
-    header('Content-Type: text/csv; charset=UTF-8');
+    // ---- CSV出力 ----
+    header('Content-Type: application/octet-stream');
     header("Content-Disposition: attachment; filename=\"" . mb_convert_encoding($filename, 'SJIS-win', 'UTF-8') . "\"");
 
     $output = fopen('php://output', 'w');
+
+    // Excelで文字化けしないようにBOMを付ける
+    // SJISでは不要・UTF-8のみ必要 → 今回はSJIS変換なので省略
+
     if (!empty($rows)) {
-        fputcsv($output, array_keys($rows[0]));
+        // ヘッダ行をSJIS変換して出力
+        fputcsv($output, array_map(fn($v) => mb_convert_encoding($v, 'SJIS-win', 'UTF-8'), array_keys($rows[0])));
         foreach ($rows as $r) {
-            $escaped = array_map(fn($v) => str_replace(["\r", "\n"], [' ', ' '], $v), $r);
+            $escaped = array_map(fn($v) => mb_convert_encoding(str_replace(["\r", "\n"], [' ', ' '], $v), 'SJIS-win', 'UTF-8'), $r);
             fputcsv($output, $escaped);
         }
     } else {
-        fputcsv($output, ['データがありません。']);
+        fputcsv($output, [mb_convert_encoding('データがありません。', 'SJIS-win', 'UTF-8')]);
     }
+
     fclose($output);
     exit;
 }
@@ -98,7 +96,6 @@ nav a.active{background:#0b57d0}
 
 <header>管理者：データ出力</header>
 
-<!-- 共通ナビゲーション -->
 <nav>
     <a href="admin_dashboard.php">📊 ダッシュボード</a>
     <a href="admin_register.php">👥 ユーザー管理</a>
