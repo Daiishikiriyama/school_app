@@ -219,12 +219,22 @@ th{background:#e8f0fe}
 </style>
 </head>
 <body>
-<header>管理者：ユーザー管理</header>
-<nav>
-    <a href="admin_dashboard.php">📊 ダッシュボード</a> |
-    <a href="admin_register.php">👥 ユーザー管理</a> |
-    <a href="admin_classes.php">🏫 クラス管理</a> |
-    <a href="login.php?logout=1" class="logout">🚪 ログアウト</a>
+<header>
+管理者：ユーザー管理
+</header>
+
+<!-- ▼ 共通ナビゲーションメニュー -->
+<nav style="background:#003c9e;color:#fff;display:flex;justify-content:center;gap:20px;padding:10px 0;">
+    <a href="admin_dashboard.php" style="color:#fff;text-decoration:none;font-weight:bold;padding:6px 12px;border-radius:6px;">📊 ダッシュボード</a>
+    <a href="admin_register.php" style="color:#fff;text-decoration:none;font-weight:bold;padding:6px 12px;border-radius:6px;background:#0b57d0;">👥 ユーザー管理</a>
+    <a href="admin_classes.php" style="color:#fff;text-decoration:none;font-weight:bold;padding:6px 12px;border-radius:6px;">🏫 クラス管理</a>
+    <a href="admin_export.php" style="color:#fff;text-decoration:none;font-weight:bold;padding:6px 12px;border-radius:6px;">⬇️ データ出力</a>
+    <form method="get" action="admin_register.php" style="display:inline;margin-left:20px;">
+        <button class="logout-btn" name="logout" value="1" 
+                style="background:#fff;color:#0d5bd7;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-weight:700;">
+            ログアウト
+        </button>
+    </form>
 </nav>
 
 <div class="container">
