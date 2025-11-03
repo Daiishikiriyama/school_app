@@ -76,10 +76,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         h1 { color: #333; }
         .error { color: red; margin-bottom: 10px; }
         .form-container { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); width: 700px; margin: auto; }
-        select, textarea, button { width: 100%; padding: 10px; margin-top: 10px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; }
+        select, textarea, button, a.btn-link { width: 100%; padding: 10px; margin-top: 10px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; text-align:center; }
         textarea { height: 80px; resize: vertical; }
         button { background-color: #007bff; color: white; font-weight: bold; border: none; cursor: pointer; margin-top: 20px; }
         button:hover { background-color: #0056b3; }
+        .btn-link { display:inline-block; background-color:#28a745; color:white; text-decoration:none; border:none; font-weight:bold; cursor:pointer; margin-top:10px; }
+        .btn-link:hover { background-color:#218838; }
         .section { margin-bottom: 30px; }
         .note { color: #777; font-size: 0.9em; }
     </style>
@@ -161,8 +163,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <textarea name="free_home"></textarea>
 
     <button type="submit">送信する</button>
+
+    <!-- ✅ サイトCへの導線ボタン -->
+    <?php if (isset($_SESSION['class_id'])): ?>
+        <a href="siteC.php?class_id=<?= $_SESSION['class_id'] ?>" class="btn-link">📊 自分のクラスのランキングを見る</a>
+    <?php endif; ?>
+
 </form>
 </div>
 
 </body>
 </html>
+
